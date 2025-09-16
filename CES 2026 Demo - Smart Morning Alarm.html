@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lunawake AI • CES 2026 Demo - Smart Morning Alarm</title>
+  <style>
+    :root {
+      --bg0: #0a0b0f;
+      --bg1: #151722;
+      --bg2: #1f2332;
+      --grid: rgba(255,255,255,.015);
+      --grid-line: rgba(255,255,255,.04);
+      --text: #e8ecf6;
+      --muted: #9aa3b2;
+      --wing-speed: .9s;
+      --breath-speed: 5s;
+      --base-offset: 0px;
+      --wing-amplitude: 30px;
+      --squash: .82;
+      --left-shift: 0px;
+      --right-shift: 0px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      background-color: var(--bg0);
+      background-image:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px),
+        radial-gradient(1400px 900px at 65% 15%, var(--bg2), var(--bg1) 60%, var(--bg0));
+      background-size: 24px 24px, 24px 24px, 100% 100%;
+      color: var(--text);
+      font: 500 16px / 1.5 Inter, ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial;
+    }
+
+    .wrap {
+      min-height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    header, footer {
+      padding: 16px 24px;
+      opacity: 0.9;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: linear-gradient(145deg, rgb(255, 106, 106), rgb(255, 145, 81));
+      box-shadow: rgba(255, 120, 90, 0.45) 0px 0px 18px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .stage {
+      display: grid;
+      place-items: center;
+      padding: 12px;
+    }
+
+    .canvas {
+      position: relative;
+      width: min(1600px, 95vw);
+      height: 70vh;
+      min-height: 600px;
+      aspect-ratio: 16/9; /* 电视比例 */
+      border-radius: 24px;
+      background:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
+      background-size: 20px 20px, 20px 20px, 100% 100%;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow:
+        rgba(0, 0, 0, 0.4) 0px 25px 70px,
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+      backdrop-filter: blur(20px);
+    }
+
+    .headline {
+      position: absolute;
+      top: 28px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      text-align: center;
+      font-size: clamp(22px, 3.2vw, 34px);
+      white-space: nowrap;
+      transition: opacity 0.8s ease-in-out, transform 0.8s ease-in-out;
+    }
+
+    .metrics {
+      position: absolute;
+      bottom: 22px;
+      left: 22px;
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .metric {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      padding: 12px 14px;
+      border-radius: 14px;
+      min-width: 130px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .metric .label {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .metric .value {
+      font-size: 28px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      min-width: 85px;
+      display: inline-block;
+    }
+
+    .butterfly {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .core {
+      position: relative;
+      width: min(350px, 22vw);
+      height: min(250px, 14vw);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform: translateZ(0); /* 强制硬件加速 */
+      backface-visibility: hidden;
+    }
+
+    .wing {
+      position: absolute;
+      top: 10%;
+      bottom: 10%;
+      width: 44%;
+    }
+
+
+    .wing.left {
+      left: 6%;
+      transform-origin: right center;
+    }
+
+    .wing.right {
+      right: 6%;
+      transform-origin: left center;
+    }
+
+    .core.flap .left {
+      animation: wingL var(--wing-speed) cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
+      will-change: transform;
+    }
+
+    .core.flap .right {
+      animation: wingR var(--wing-speed) cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
+      will-change: transform;
+    }
+
+    /* CES展位增强：心率同步视觉反馈 */
+    .core.heart-sync {
+      filter: drop-shadow(0 0 20px rgba(255, 106, 106, 0.6));
+      transform: scale(1.02);
+    }
+
+    .headline.updating {
+      color: rgba(255, 145, 81, 0.9);
+      text-shadow: 0 0 10px rgba(255, 145, 81, 0.3);
+    }
+
+    /* 优化的蝴蝶翅膀动画 - 更流畅的60fps */
+    @keyframes wingL {
+      0% { transform: scaleX(1) rotateY(0deg) translateZ(0); }
+      25% { transform: scaleX(0.85) rotateY(-8deg) translateZ(0); }
+      50% { transform: scaleX(0.5) rotateY(-20deg) translateZ(0); }
+      75% { transform: scaleX(0.8) rotateY(-10deg) translateZ(0); }
+      100% { transform: scaleX(1) rotateY(0deg) translateZ(0); }
+    }
+
+    @keyframes wingR {
+      0% { transform: scaleX(1) rotateY(0deg) translateZ(0); }
+      25% { transform: scaleX(0.85) rotateY(8deg) translateZ(0); }
+      50% { transform: scaleX(0.5) rotateY(20deg) translateZ(0); }
+      75% { transform: scaleX(0.8) rotateY(10deg) translateZ(0); }
+      100% { transform: scaleX(1) rotateY(0deg) translateZ(0); }
+    }
+
+    /* 为电视显示优化性能 */
+    .wing svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      transform: translateZ(0); /* 强制硬件加速 */
+      backface-visibility: hidden;
+    }
+
+    .aura {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      filter: blur(28px);
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    .aura .blob {
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 40%, rgba(255, 145, 81, 0.75), rgba(255, 106, 106, 0.5), transparent 70%);
+      animation: breath var(--breath-speed) ease-in-out infinite;
+    }
+
+    @keyframes breath {
+      0% { transform: scale(0.92); }
+      50% { transform: scale(1.06); }
+      100% { transform: scale(0.92); }
+    }
+
+    .hint {
+      position: absolute;
+      bottom: 22px;
+      right: 22px;
+    }
+
+    .sleepcard {
+      position: absolute;
+      top: 50%;
+      right: 22px;
+      transform: translateY(-50%);
+      display: grid;
+      gap: 8px;
+      min-width: 220px;
+    }
+
+    .sleepcard .row {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      padding: 8px 12px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .sleepcard .k {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .sleepcard .v {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      min-width: 70px;
+      display: inline-block;
+      text-align: right;
+    }
+
+    .chip {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 8px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand"><span class="dot"></span><strong>Lunawake AI • Smart Morning Alarm Clock</strong></div>
+      <div class="toolbar"></div>
+    </header>
+
+    <main class="stage">
+      <section class="canvas" id="canvas">
+        <div class="headline" id="headline">Sleep better with Lunawake</div>
+
+        <div class="butterfly">
+          <div class="aura"><div class="blob"></div></div>
+          <div class="core flap" id="core">
+            <div class="wing left">
+              <svg viewBox="0 0 40 62" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+                <path id="wingPathL" d="M15.1544 61.8112C32.16 57.4157 42.5533 40.2467 38.3686 23.4632C34.1838 6.6796 17.0056 -3.36292 0 1.03257C0 1.03257 3.39183 14.6385 7.57659 31.4221C11.7614 48.2056 15.1544 61.8112 15.1544 61.8112Z" fill="url(#gradWingL)"></path>
+                <defs>
+                  <linearGradient id="gradWingL" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#FD975A"></stop>
+                    <stop offset="100%" stop-color="#F34444"></stop>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+            <div class="wing right">
+              <svg viewBox="0 0 40 62" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+                <path id="wingPathR" d="M24.8456 61.8112C7.84 57.4157 -2.5533 40.2467 1.6314 23.4632C5.8162 6.6796 22.9944 -3.36292 40 1.03257C40 1.03257 36.6082 14.6385 32.4234 31.4221C28.2386 48.2056 24.8456 61.8112 24.8456 61.8112Z" fill="url(#gradWingR)"></path>
+                <defs>
+                  <linearGradient id="gradWingR" x1="1" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#FD975A"></stop>
+                    <stop offset="100%" stop-color="#F34444"></stop>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="metrics">
+          <div class="metric"><div class="label">Heart rate</div><div class="value"><span id="hr">69</span> bpm</div></div>
+          <div class="metric"><div class="label">Respiratory rate</div><div class="value"><span id="br">18</span> rpm</div></div>
+        </div>
+
+        <div class="sleepcard" id="sleepcard">
+          <div class="row"><span class="k">Sleep Time</span><span class="v" id="sleepTime">11:08 pm</span></div>
+          <div class="row"><span class="k">Wake Window</span><span class="v" id="wakeWindow">6:40–7:10 am</span></div>
+          <div class="row"><span class="k">Duration</span><span class="v" id="duration">7h 32m</span></div>
+          <div class="row"><span class="k">Deep Sleep</span><span class="v" id="deepSleep">1h 32m</span></div>
+          <div class="row"><span class="k">Time to Sleep</span><span class="v" id="tts">13m</span></div>
+        </div>
+
+        <div class="hint chip">
+          <span id="modeIndicator">Heart rate synced butterfly • AI sleep alarm demo</span> •
+          <button id="demoButton" style="background: none; border: 1px solid rgba(255,255,255,0.3); color: inherit; padding: 4px 8px; border-radius: 8px; font-size: 11px; cursor: pointer;">Demo Mode</button>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <small>© <span id="year">2025</span> Lunawake — No camera. No raw audio recording. Vital signs processed locally; encrypted cloud backup optional.</small>
+    </footer>
+  </div>
+
+  <script>
+    // Update year
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    // 心率和呼吸数据管理
+    let currentHeartRate = 69;
+    let currentBreathRate = 18;
+    let breathingPhase = 0;
+
+    // 更新翅膀扑动节奏与心率同步（更自然的呼吸节奏）
+    let targetFlutterDuration = 4.0; // 目标扑动时长
+    let currentFlutterDuration = 4.0; // 当前扑动时长
+    let lastUpdateTime = Date.now();
+
+    // 电视优化：超流畅的心率同步算法
+    function updateWingFlutterToHeartRate() {
+      const heartRateElement = document.getElementById('hr');
+      const heartRate = parseFloat(heartRateElement.textContent);
+      const coreElement = document.getElementById('core');
+
+      // 直接映射心率到扇动速度，针对电视显示优化
+      // 心率范围: 60-100 bpm -> 扇动速度: 0.8-1.8秒（稍慢避免卡顿）
+      let flutterSpeed;
+      if (heartRate < 60) {
+        flutterSpeed = 1.8;
+      } else if (heartRate > 100) {
+        flutterSpeed = 0.8;
+      } else {
+        // 线性映射: 60bpm->1.8s, 100bpm->0.8s
+        flutterSpeed = 1.8 - ((heartRate - 60) / 40) * 1.0;
+      }
+
+      // 减少自然变化，确保电视显示的稳定性
+      const naturalVariation = 1 + (Math.sin(Date.now() / 8000) * 0.03);
+      const finalSpeed = flutterSpeed * naturalVariation;
+
+      // 使用requestAnimationFrame确保流畅更新
+      requestAnimationFrame(() => {
+        document.documentElement.style.setProperty('--wing-speed', `${finalSpeed.toFixed(3)}s`);
+      });
+
+      // 展位增强：心率同步视觉反馈
+      if (heartRate > 75) {
+        coreElement.classList.add('heart-sync');
+      } else {
+        coreElement.classList.remove('heart-sync');
+      }
+    }
+
+    // 添加真实的心率变异性
+    function addRealisticHeartRateVariability() {
+      setInterval(() => {
+        const baseHeartRate = 69; // 基准心率
+        const currentTime = Date.now();
+
+        // 呼吸性窦性心律不齐
+        const breathCycleDuration = (60 / currentBreathRate) * 1000;
+        breathingPhase = ((currentTime % breathCycleDuration) / breathCycleDuration) * 2 * Math.PI;
+        const respiratoryVariation = Math.sin(breathingPhase) * 2; // ±2 bpm
+
+        // 自然心率变异性
+        const hrv = (Math.random() - 0.5) * 3; // ±1.5 bpm的随机变化
+
+        // 长期趋势变化
+        const longTermTrend = Math.sin(currentTime / 25000) * 1.5; // 25秒周期
+
+        // 计算最终心率
+        const finalHeartRate = Math.max(50, Math.min(100,
+          baseHeartRate + respiratoryVariation + hrv + longTermTrend
+        ));
+
+        currentHeartRate = finalHeartRate;
+
+        // 更新显示（保留1位小数）
+        document.getElementById('hr').textContent = finalHeartRate.toFixed(1);
+
+        // 实时更新翅膀扑动速度
+        updateWingFlutterToHeartRate();
+
+        // 更新智能标题
+        updateSmartHeadline(finalHeartRate);
+
+      }, 200); // 每200ms更新一次
+    }
+
+    // 增强的呼吸频率变异性
+    function addEnhancedBreathingVariability() {
+      setInterval(() => {
+        const baseBreathRate = 18;
+
+        // 深度呼吸周期变化（模拟深浅呼吸交替）
+        const deepBreathCycle = Math.sin(Date.now() / 15000) * 1.2; // 15秒周期
+
+        // 与心率的生理耦合
+        const heartRateCoupling = (currentHeartRate - 69) * 0.05;
+
+        // 睡眠状态影响（模拟深睡时呼吸更慢更规律）
+        const sleepEffect = Math.sin(Date.now() / 120000) * -0.8; // 2分钟周期，模拟睡眠深度变化
+
+        // 自然随机变化
+        const naturalVariation = (Math.random() - 0.5) * 1.2;
+
+        // 呼吸相位同步效应
+        const breathPhaseEffect = Math.cos(breathingPhase * 0.5) * 0.3;
+
+        const finalBreathRate = Math.max(12, Math.min(24,
+          baseBreathRate + deepBreathCycle + heartRateCoupling + sleepEffect + naturalVariation + breathPhaseEffect
+        ));
+
+        currentBreathRate = finalBreathRate;
+        document.getElementById('br').textContent = finalBreathRate.toFixed(1);
+
+      }, 2000); // 每2秒更新呼吸频率
+    }
+
+    // 睡眠数据管理
+    let sleepData = {
+      sleepTime: "11:08 pm",
+      wakeWindow: "6:40–7:10 am",
+      duration: "7h 32m",
+      deepSleep: "1h 32m",
+      timeToSleep: "13m"
+    };
+
+    // CES展位专用：AI晨间闹钟唤醒消息库
+    const smartMessages = {
+      detecting: [
+        "📡 AI Sleep Monitor detecting your presence...",
+        "🔍 Lunawake is scanning your vital signs",
+        "⚙️ Calibrating to your unique sleep rhythm",
+        "👁️ Millimeter wave sensor activated"
+      ],
+      restful: [
+        "🌅 Rise and shine! Your calm heart rate shows perfect sleep",
+        "☀️ Good morning, sleepyhead! Time for a gentle wake-up",
+        "😌 Wakey wakey! Your peaceful rhythm deserves a soft alarm",
+        "🌸 Morning bloom! Your rested heart beats beautifully",
+        "🕊️ Gentle wake-up call for your serene sleep pattern"
+      ],
+      elevated: [
+        "⏰ Good morning! Your active heart suggests you're ready to rise",
+        "🚀 Wake-up boost! Your elevated pulse means energy awaits",
+        "⚡ Morning charge! Your heart rate shows you're primed for action",
+        "🔥 Power wake-up! Your vitals indicate high energy reserves",
+        "💪 Strong morning! Your elevated pulse means go-time"
+      ],
+      active: [
+        "🏃‍♀️ Already moving? Perfect time for your personalized alarm!",
+        "🎯 Morning warrior! Your heart rate shows you're ready to conquer",
+        "⭐ Superstar wake-up! Your active vitals mean it's showtime",
+        "🌟 Dynamic morning! Your pulse pattern suggests peak readiness",
+        "🚀 Blast-off wake-up! Your heart rate indicates launch mode"
+      ],
+      leaving: [
+        "🌅 Early bird wake-up! Your rhythm shows dawn patrol energy",
+        "🏃‍♂️ Sprint start! Your heart rate suggests morning jog time",
+        "☕ Coffee run wake-up! Your pulse indicates caffeine calling",
+        "💼 Work mode activated! Your vitals show productivity peaks",
+        "🌍 Adventure wake-up! Your heart rate screams 'seize the day'"
+      ],
+      returning: [
+        "🛏️ Back to bed? Your heart rate suggests snooze mode",
+        "😴 Cozy wake-up! Your settled pulse means comfort zone time",
+        "🧘‍♀️ Zen morning! Your calm rhythm suggests mindful wake-up",
+        "🌊 Flow state wake-up! Your steady heart beats with the tide",
+        "🍃 Natural wake-up! Your gentle rhythm follows nature's pace"
+      ],
+      irregular: [
+        "🎼 Unique rhythm! Your irregular heartbeat needs a custom alarm",
+        "🎭 Dynamic wake-up! Your varied pulse creates personalized timing",
+        "🎨 Artistic morning! Your heart paints its own wake-up pattern",
+        "🌈 Rainbow wake-up! Your diverse rhythm spans every mood",
+        "🎪 Carnival morning! Your playful heartbeat sets the celebration"
+      ],
+      peaceful: [
+        "😇 Angelic wake-up! Your peaceful heart deserves heaven's alarm",
+        "🌙 Dream transition! Your calm pulse guides gentle awakening",
+        "✨ Magic morning! Your serene heartbeat creates perfect timing",
+        "🕯️ Candlelight wake-up! Your soft rhythm glows into morning",
+        "🦋 Butterfly emergence! Your gentle pulse mirrors transformation"
+      ]
+    };
+
+    let currentMessageCategory = "detecting";
+    let lastHeartRatePattern = [];
+    let messageChangeTimer = 0;
+    let demoMode = false;
+    let demoHeartRates = [65, 72, 68, 85, 78, 63, 90, 75]; // 演示用心率序列
+    let demoIndex = 0;
+    let demoInterval;
+
+    // 基于心率模拟睡眠数据的缓慢变化
+    function simulateSleepDataBasedOnHeartRate() {
+      setInterval(() => {
+        const avgHeartRate = currentHeartRate;
+
+        // 根据心率计算睡眠质量指标
+        const heartRateStress = Math.abs(avgHeartRate - 65); // 65是理想睡眠心率
+        const sleepQuality = Math.max(0.3, 1 - heartRateStress / 30); // 0.3-1.0
+
+        // 动态调整深睡时间（心率越稳定，深睡越多）
+        const baseDeepSleep = 92; // 基础92分钟
+        const deepSleepVariation = (sleepQuality - 0.5) * 40; // ±20分钟
+        const finalDeepSleep = Math.max(45, Math.min(140, baseDeepSleep + deepSleepVariation));
+
+        const deepHours = Math.floor(finalDeepSleep / 60);
+        const deepMinutes = Math.round(finalDeepSleep % 60);
+        sleepData.deepSleep = `${deepHours}h ${deepMinutes}m`;
+
+        // 动态调整入睡时间（心率越低越快入睡）
+        const baseTTS = 13; // 基础13分钟
+        const ttsVariation = (avgHeartRate - 65) * 0.3; // 心率每高1bpm多0.3分钟
+        const finalTTS = Math.max(3, Math.min(25, baseTTS + ttsVariation));
+        sleepData.timeToSleep = `${Math.round(finalTTS)}m`;
+
+        // 动态调整总睡眠时长
+        const baseDuration = 452; // 基础7h32m = 452分钟
+        const durationVariation = sleepQuality * 30 - 15; // ±15分钟
+        const finalDuration = Math.max(360, Math.min(540, baseDuration + durationVariation));
+
+        const totalHours = Math.floor(finalDuration / 60);
+        const totalMinutes = Math.round(finalDuration % 60);
+        sleepData.duration = `${totalHours}h ${totalMinutes}m`;
+
+        // 更新显示
+        document.getElementById('deepSleep').textContent = sleepData.deepSleep;
+        document.getElementById('tts').textContent = sleepData.timeToSleep;
+        document.getElementById('duration').textContent = sleepData.duration;
+
+      }, 15000); // 每15秒更新一次睡眠数据
+    }
+
+    // 模拟时间相关的睡眠数据变化（非实时但有规律）
+    function simulateTimeBasedSleepUpdates() {
+      setInterval(() => {
+        const now = new Date();
+        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+        // 模拟睡眠时间的微调（基于当前心率趋势）
+        const heartRateTrend = (currentHeartRate - 69) / 10; // 标准化心率趋势
+
+        // 睡眠时间微调（±5分钟范围）
+        const baseHour = 23;
+        const baseMinute = 8;
+        const timeAdjustment = Math.round(heartRateTrend * 3); // ±3分钟调整
+
+        let adjustedMinute = baseMinute + timeAdjustment;
+        let adjustedHour = baseHour;
+
+        if (adjustedMinute < 0) {
+          adjustedMinute += 60;
+          adjustedHour -= 1;
+        } else if (adjustedMinute >= 60) {
+          adjustedMinute -= 60;
+          adjustedHour += 1;
+        }
+
+        // 格式化时间显示
+        const sleepTimeStr = `${adjustedHour === 12 ? 12 : adjustedHour % 12}:${adjustedMinute.toString().padStart(2, '0')} ${adjustedHour >= 12 ? 'pm' : 'am'}`;
+        sleepData.sleepTime = sleepTimeStr;
+
+        // 相应调整唤醒窗口
+        const wakeHour = 6 + Math.round(timeAdjustment / 10); // 微调唤醒时间
+        const wakeEndHour = wakeHour + 1;
+        sleepData.wakeWindow = `${wakeHour}:40–${wakeEndHour}:10 am`;
+
+        // 更新显示
+        document.getElementById('sleepTime').textContent = sleepData.sleepTime;
+        document.getElementById('wakeWindow').textContent = sleepData.wakeWindow;
+
+      }, 45000); // 每45秒更新一次时间相关数据
+    }
+
+    // CES展位优化：更敏感的心率响应系统
+    function updateSmartHeadline(currentHR) {
+      // 记录心率模式用于分析（展位环境下缩短历史记录）
+      lastHeartRatePattern.push(currentHR);
+      if (lastHeartRatePattern.length > 10) { // 减少到10个数据点，更快响应
+        lastHeartRatePattern.shift();
+      }
+
+      messageChangeTimer++;
+
+      // 更频繁的更新(每15次更新约3秒)，提高展位互动性
+      if (messageChangeTimer >= 15) {
+        messageChangeTimer = 0;
+        analyzeHeartRatePattern();
+      }
+    }
+
+    // CES展位优化：更敏感的心率模式分析
+    function analyzeHeartRatePattern() {
+      if (lastHeartRatePattern.length < 5) return; // 更少数据点即可分析
+
+      const recentHR = lastHeartRatePattern.slice(-5); // 只看最近5个数据点
+      const avgHR = recentHR.reduce((a, b) => a + b, 0) / recentHR.length;
+      const hrVariability = Math.max(...recentHR) - Math.min(...recentHR);
+      const trend = recentHR[recentHR.length - 1] - recentHR[0];
+
+      let newCategory = currentMessageCategory;
+
+      // 展位环境优化的状态判断（更宽松的阈值）
+      if (avgHR < 60) {
+        newCategory = "peaceful";
+      } else if (avgHR < 70 && hrVariability < 8) {
+        newCategory = "restful";
+      } else if (avgHR > 80) {
+        if (trend > 3) {
+          newCategory = "active"; // 降低趋势阈值
+        } else if (trend < -3) {
+          newCategory = "returning";
+        } else {
+          newCategory = "elevated";
+        }
+      } else if (avgHR > 90) {
+        newCategory = "leaving";
+      } else if (hrVariability > 10) { // 降低变异性阈值
+        newCategory = "irregular";
+      } else {
+        newCategory = "restful"; // 默认状态
+      }
+
+      // 展位环境下更频繁更新消息（60%概率）
+      if (newCategory !== currentMessageCategory || Math.random() > 0.4) {
+        currentMessageCategory = newCategory;
+        updateHeadlineMessage();
+      }
+    }
+
+    function updateHeadlineMessage() {
+      const messages = smartMessages[currentMessageCategory];
+      const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+
+      const headlineElement = document.getElementById('headline');
+
+      // 展位增强：更明显的消息更新效果
+      headlineElement.classList.add('updating');
+      headlineElement.style.opacity = '0.3';
+      headlineElement.style.transform = 'translateX(-50%) translateY(-5px)';
+
+      setTimeout(() => {
+        headlineElement.textContent = randomMessage;
+        // 淡入效果
+        headlineElement.style.opacity = '1';
+        headlineElement.style.transform = 'translateX(-50%) translateY(0)';
+
+        // 移除更新样式
+        setTimeout(() => {
+          headlineElement.classList.remove('updating');
+        }, 1000);
+      }, 600); // 稍快的切换速度
+    }
+
+    // CES展位演示模式功能
+    function toggleDemoMode() {
+      demoMode = !demoMode;
+      const button = document.getElementById('demoButton');
+      const indicator = document.getElementById('modeIndicator');
+
+      if (demoMode) {
+        button.textContent = 'Stop Demo';
+        button.style.backgroundColor = 'rgba(255, 106, 106, 0.3)';
+        indicator.textContent = 'DEMO MODE: Simulating different heart rates';
+        startDemo();
+      } else {
+        button.textContent = 'Demo Mode';
+        button.style.backgroundColor = 'transparent';
+        indicator.textContent = 'Heart rate synced butterfly • AI sleep alarm demo';
+        stopDemo();
+      }
+    }
+
+    function startDemo() {
+      // 每3秒切换一个演示心率
+      demoInterval = setInterval(() => {
+        const demoHR = demoHeartRates[demoIndex];
+        document.getElementById('hr').textContent = demoHR;
+        currentHeartRate = demoHR;
+
+        // 强制更新蝴蝶扇动和消息
+        updateWingFlutterToHeartRate();
+        updateSmartHeadline(demoHR);
+
+        demoIndex = (demoIndex + 1) % demoHeartRates.length;
+      }, 3000);
+    }
+
+    function stopDemo() {
+      if (demoInterval) {
+        clearInterval(demoInterval);
+      }
+      // 恢复正常模拟
+      addRealisticHeartRateVariability();
+    }
+
+    // 初始化所有功能
+    updateWingFlutterToHeartRate();
+    addRealisticHeartRateVariability();
+    addEnhancedBreathingVariability();
+    simulateSleepDataBasedOnHeartRate();
+    simulateTimeBasedSleepUpdates();
+
+    // 绑定演示模式按钮和键盘快捷键
+    document.getElementById('demoButton').addEventListener('click', toggleDemoMode);
+
+    // 展位快捷键：按 'D' 键快速切换演示模式
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 'd' || event.key === 'D') {
+        toggleDemoMode();
+      }
+      // 按 'R' 键重置到初始状态
+      if (event.key === 'r' || event.key === 'R') {
+        location.reload();
+      }
+    });
+
+    // 初始设置一个消息
+    setTimeout(() => {
+      updateHeadlineMessage();
+    }, 1000);
+  </script>
+</body>
+</html>
